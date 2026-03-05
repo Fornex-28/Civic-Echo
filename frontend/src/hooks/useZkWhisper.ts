@@ -9,6 +9,7 @@ import {
 import { Program, AnchorProvider, BN, setProvider } from "@coral-xyz/anchor";
 import idl from "@/lib/idl/zk_whisper.json";
 import { CivicReport } from "@/lib/types";
+import { DUMMY_REPORTS } from "@/lib/dummy-data";
 import { useToast } from "@/components/ToastProvider";
 import { supabase } from "@/lib/supabase";
 
@@ -129,6 +130,13 @@ export function useZkWhisper(): UseZkWhisperReturn {
         setLoading(true);
 
         try {
+            // Skip if Supabase is not configured
+            if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === "YOUR_SUPABASE_URL") {
+                setReports(DUMMY_REPORTS);
+                setLoading(false);
+                return;
+            }
+
             const { data, error } = await supabase
                 .from("reports")
                 .select("*")
@@ -137,14 +145,14 @@ export function useZkWhisper(): UseZkWhisperReturn {
             if (error) throw error;
 
             const supaReports = (data || []).map(rowToReport);
-            setReports(supaReports);
+            setReports(supaReports.length > 0 ? supaReports : DUMMY_REPORTS);
         } catch (err) {
-            console.warn("Failed to fetch reports from Supabase:", err);
-            toast("error", "Could not load reports from database");
+            console.warn("Failed to fetch reports from Supabase, using fallback data:", err);
+            setReports(DUMMY_REPORTS);
         } finally {
             setLoading(false);
         }
-    }, [toast]);
+    }, []);
 
     // Load reports on mount
     useEffect(() => {
