@@ -1,0 +1,212 @@
+{
+    "version": "0.1.0",
+    "name": "zk_whisper",
+    "instructions": [
+        {
+            "name": "initializeReport",
+            "accounts": [
+                {
+                    "name": "civicReport",
+                    "isMut": true,
+                    "isSigner": false
+                },
+                {
+                    "name": "reporter",
+                    "isMut": true,
+                    "isSigner": true
+                },
+                {
+                    "name": "systemProgram",
+                    "isMut": false,
+                    "isSigner": false
+                }
+            ],
+            "args": [
+                {
+                    "name": "reportId",
+                    "type": "u64"
+                },
+                {
+                    "name": "locationLat",
+                    "type": "f32"
+                },
+                {
+                    "name": "locationLng",
+                    "type": "f32"
+                },
+                {
+                    "name": "district",
+                    "type": "string"
+                },
+                {
+                    "name": "wardNumber",
+                    "type": "u8"
+                },
+                {
+                    "name": "ipfsCid",
+                    "type": "string"
+                },
+                {
+                    "name": "category",
+                    "type": "string"
+                }
+            ]
+        },
+        {
+            "name": "echoReport",
+            "accounts": [
+                {
+                    "name": "civicReport",
+                    "isMut": true,
+                    "isSigner": false
+                },
+                {
+                    "name": "echoReceipt",
+                    "isMut": true,
+                    "isSigner": false
+                },
+                {
+                    "name": "voter",
+                    "isMut": true,
+                    "isSigner": true
+                },
+                {
+                    "name": "systemProgram",
+                    "isMut": false,
+                    "isSigner": false
+                }
+            ],
+            "args": []
+        },
+        {
+            "name": "closeReport",
+            "accounts": [
+                {
+                    "name": "civicReport",
+                    "isMut": true,
+                    "isSigner": false
+                },
+                {
+                    "name": "reporter",
+                    "isMut": false,
+                    "isSigner": true
+                }
+            ],
+            "args": []
+        }
+    ],
+    "accounts": [
+        {
+            "name": "CivicReport",
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "reporter",
+                        "type": "publicKey"
+                    },
+                    {
+                        "name": "reportId",
+                        "type": "u64"
+                    },
+                    {
+                        "name": "locationLat",
+                        "type": "f32"
+                    },
+                    {
+                        "name": "locationLng",
+                        "type": "f32"
+                    },
+                    {
+                        "name": "district",
+                        "type": "string"
+                    },
+                    {
+                        "name": "wardNumber",
+                        "type": "u8"
+                    },
+                    {
+                        "name": "ipfsCid",
+                        "type": "string"
+                    },
+                    {
+                        "name": "category",
+                        "type": "string"
+                    },
+                    {
+                        "name": "upvotes",
+                        "type": "u64"
+                    },
+                    {
+                        "name": "isPetition",
+                        "type": "bool"
+                    },
+                    {
+                        "name": "status",
+                        "type": {
+                            "defined": "ReportStatus"
+                        }
+                    },
+                    {
+                        "name": "createdAt",
+                        "type": "i64"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "EchoReceipt",
+            "type": {
+                "kind": "struct",
+                "fields": []
+            }
+        }
+    ],
+    "types": [
+        {
+            "name": "ReportStatus",
+            "type": {
+                "kind": "enum",
+                "variants": [
+                    {
+                        "name": "Active"
+                    },
+                    {
+                        "name": "Petition"
+                    },
+                    {
+                        "name": "Resolved"
+                    },
+                    {
+                        "name": "Closed"
+                    }
+                ]
+            }
+        }
+    ],
+    "errors": [
+        {
+            "code": 6000,
+            "name": "StringTooLong",
+            "msg": "String field exceeds the 64-byte maximum length."
+        },
+        {
+            "code": 6001,
+            "name": "CategoryTooLong",
+            "msg": "Category field exceeds the 32-byte maximum length."
+        },
+        {
+            "code": 6002,
+            "name": "ReportNotActive",
+            "msg": "Report is not in an active state."
+        },
+        {
+            "code": 6003,
+            "name": "Unauthorized",
+            "msg": "You are not authorized to perform this action."
+        }
+    ],
+    "metadata": {
+        "address": "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+    }
+}

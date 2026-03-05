@@ -1,0 +1,196 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #07070d;
+  --bg-secondary: #0e0e18;
+  --bg-elevated: #141422;
+  --bg-card: #18182b;
+  --bg-card-hover: #1f1f38;
+  --accent: #00e87b;
+  --accent-dim: rgba(0, 232, 123, 0.12);
+  --accent-glow: rgba(0, 232, 123, 0.25);
+  --danger: #ff3b5c;
+  --danger-dim: rgba(255, 59, 92, 0.12);
+  --cyan: #00c8ff;
+  --purple: #9333ea;
+  --text-1: #f0f0f3;
+  --text-2: #9d9db5;
+  --text-3: #5c5c76;
+  --line: rgba(255, 255, 255, 0.06);
+  --line-2: rgba(255, 255, 255, 0.1);
+  --radius: 14px;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@theme inline {
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-1);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ── FIX SCROLL ── */
+html,
+body {
+  overflow-x: hidden;
+  overflow-y: auto !important;
+  height: auto !important;
+  min-height: 100vh;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-1);
+  font-family: var(--font-sans), "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--text-3);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-2);
+}
+
+/* ── Wallet adapter ── */
+.wallet-adapter-button {
+  background: var(--accent) !important;
+  color: #07070d !important;
+  border-radius: 10px !important;
+  font-family: var(--font-sans), system-ui, sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  padding: 8px 20px !important;
+  transition: all 0.2s ease !important;
+}
+
+.wallet-adapter-button:hover {
+  box-shadow: 0 0 24px var(--accent-glow) !important;
+  transform: translateY(-1px) !important;
+}
+
+.wallet-adapter-modal-wrapper {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--line) !important;
+}
+
+/* ── Map markers ── */
+@keyframes pulse-red {
+
+  0%,
+  100% {
+    box-shadow: 0 0 8px 2px rgba(255, 59, 92, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 20px 6px rgba(255, 59, 92, 0.4);
+  }
+}
+
+@keyframes pulse-green {
+
+  0%,
+  100% {
+    box-shadow: 0 0 12px 4px var(--accent-glow);
+  }
+
+  50% {
+    box-shadow: 0 0 30px 10px var(--accent-glow);
+  }
+}
+
+.whisper-marker {
+  width: 14px;
+  height: 14px;
+  background: var(--danger);
+  border-radius: 50%;
+  cursor: pointer;
+  animation: pulse-red 2s ease-in-out infinite;
+  border: 2px solid rgba(255, 59, 92, 0.6);
+}
+
+.petition-marker {
+  width: 24px;
+  height: 24px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  animation: pulse-green 1.5s ease-in-out infinite;
+  border: 2px solid rgba(0, 232, 123, 0.6);
+}
+
+/* Terminal cursor */
+@keyframes blink-cursor {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+.terminal-cursor::after {
+  content: "█";
+  animation: blink-cursor 0.8s step-end infinite;
+  color: var(--accent);
+}
+
+/* ── Glass card ── */
+.glass-card {
+  background: rgba(20, 20, 34, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+/* ── Shimmer for skeleton loaders ── */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ── Map hover popup ── */
+.map-hover-popup .mapboxgl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+}
+
+.map-hover-popup .mapboxgl-popup-tip {
+  border-top-color: rgba(12, 12, 24, 0.96) !important;
+}
+
+/* ── Map page full screen ── */
+.map-page {
+  height: 100vh;
+  overflow: hidden;
+}
