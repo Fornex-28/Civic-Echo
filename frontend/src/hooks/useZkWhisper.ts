@@ -66,6 +66,35 @@ function rowToReport(row: any): CivicReport {
 }
 
 // ---------------------------------------------------------------------------
+// Echo dedup helpers (localStorage)
+// ---------------------------------------------------------------------------
+
+function getEchoKey(wallet: string): string {
+    return `civic-echo-echoes:${wallet}`;
+}
+
+function getEchoedSet(wallet: string): Set<string> {
+    try {
+        const raw = localStorage.getItem(getEchoKey(wallet));
+        return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+        return new Set();
+    }
+}
+
+function markEchoed(wallet: string, reportId: string): void {
+    const set = getEchoedSet(wallet);
+    set.add(reportId);
+    try {
+        localStorage.setItem(getEchoKey(wallet), JSON.stringify([...set]));
+    } catch { /* quota exceeded — ignore */ }
+}
+
+function hasEchoed(wallet: string, reportId: string): boolean {
+    return getEchoedSet(wallet).has(reportId);
+}
+
+// ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
@@ -85,6 +114,9 @@ export interface UseZkWhisperReturn {
     }) => Promise<string | null>;
     echoReport: (reportId: string) => Promise<boolean>;
     closeReport: (reportId: string) => Promise<boolean>;
+    settleReport: (reportId: string) => Promise<boolean>;
+    deleteReport: (reportId: string) => Promise<boolean>;
+    updateReport: (reportId: string, fields: Partial<{ title: string; description: string; category: string; status: string }>) => Promise<boolean>;
     refreshReports: () => Promise<void>;
 }
 
@@ -96,6 +128,54 @@ export function useZkWhisper(): UseZkWhisperReturn {
     const [isOnChain, setIsOnChain] = useState(false);
     const [loading, setLoading] = useState(true);
     const [program, setProgram] = useState<Program | null>(null);
+
+    // ---------- Supabase Realtime subscription ----------
+    useEffect(() => {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+        if (!supabaseUrl || supabaseUrl === "YOUR_SUPABASE_URL" || !supabaseUrl.startsWith("http")) {
+            return; // No realtime if Supabase isn't configured
+        }
+
+        const channel = supabase
+            .channel("reports-realtime")
+            .on(
+                "postgres_changes",
+                { event: "INSERT", schema: "public", table: "reports" },
+                (payload) => {
+                    const newReport = rowToReport(payload.new);
+                    setReports((prev) => {
+                        // Avoid duplicate — might already exist from optimistic add
+                        if (prev.some((r) => r.id === newReport.id)) return prev;
+                        return [newReport, ...prev];
+                    });
+                }
+            )
+            .on(
+                "postgres_changes",
+                { event: "UPDATE", schema: "public", table: "reports" },
+                (payload) => {
+                    const updated = rowToReport(payload.new);
+                    setReports((prev) =>
+                        prev.map((r) => (r.id === updated.id ? updated : r))
+                    );
+                }
+            )
+            .on(
+                "postgres_changes",
+                { event: "DELETE", schema: "public", table: "reports" },
+                (payload) => {
+                    const deletedId = (payload.old as any)?.id;
+                    if (deletedId) {
+                        setReports((prev) => prev.filter((r) => r.id !== deletedId));
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
 
     // ---------- Initialise the Anchor Program when wallet connects ----------
     useEffect(() => {
@@ -121,7 +201,6 @@ export function useZkWhisper(): UseZkWhisperReturn {
             console.warn("Could not initialise Anchor program:", err);
             setProgram(null);
             setIsOnChain(false);
-            toast("info", "Running in offline mode — using Supabase data");
         }
     }, [wallet, connection]);
 
@@ -130,7 +209,7 @@ export function useZkWhisper(): UseZkWhisperReturn {
         setLoading(true);
 
         try {
-            // Skip if Supabase is not configured
+            // If Supabase is not configured at all, use dummy data for local dev
             if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === "YOUR_SUPABASE_URL") {
                 setReports(DUMMY_REPORTS);
                 setLoading(false);
@@ -144,11 +223,12 @@ export function useZkWhisper(): UseZkWhisperReturn {
 
             if (error) throw error;
 
-            const supaReports = (data || []).map(rowToReport);
-            setReports(supaReports.length > 0 ? supaReports : DUMMY_REPORTS);
+            // Always use Supabase data — don't mix with dummy data
+            setReports((data || []).map(rowToReport));
         } catch (err) {
-            console.warn("Failed to fetch reports from Supabase, using fallback data:", err);
-            setReports(DUMMY_REPORTS);
+            console.warn("Failed to fetch reports from Supabase:", err);
+            // Only use dummy as last resort if fetch completely fails
+            setReports((prev) => prev.length > 0 ? prev : DUMMY_REPORTS);
         } finally {
             setLoading(false);
         }
@@ -173,6 +253,27 @@ export function useZkWhisper(): UseZkWhisperReturn {
         }): Promise<string | null> => {
             const loadingId = toast("loading", "Saving report...");
 
+            // --- Optimistic: add to local state immediately ---
+            const tempId = `temp-${Date.now()}`;
+            const optimisticReport: CivicReport = {
+                id: tempId,
+                locationLat: params.lat,
+                locationLng: params.lng,
+                district: params.district,
+                wardNumber: params.wardNumber,
+                ipfsCid: "",
+                upvotes: 0,
+                isPetition: false,
+                reporter: wallet.publicKey?.toBase58() || "anonymous",
+                category: (params.category as any) || "other",
+                createdAt: Date.now(),
+                title: params.title || params.description.slice(0, 80),
+                description: params.description,
+                imageUrl: params.imageUrl || "",
+                status: "active",
+            };
+            setReports((prev) => [optimisticReport, ...prev]);
+
             try {
                 // 1. Always insert into Supabase first
                 const { data: inserted, error: insertError } = await supabase
@@ -194,6 +295,12 @@ export function useZkWhisper(): UseZkWhisperReturn {
                     .single();
 
                 if (insertError) throw insertError;
+
+                // Replace temp report with real one
+                const realReport = rowToReport(inserted);
+                setReports((prev) =>
+                    prev.map((r) => (r.id === tempId ? realReport : r))
+                );
 
                 // 2. Optionally submit on-chain if wallet is connected
                 let txHash: string | undefined;
@@ -231,66 +338,105 @@ export function useZkWhisper(): UseZkWhisperReturn {
 
                 dismiss(loadingId);
                 toast("success", `Report saved in ${params.district}`, txHash ? { txHash } : undefined);
-                await refreshReports();
                 return inserted.id;
             } catch (err: any) {
+                // --- Rollback optimistic insert ---
+                setReports((prev) => prev.filter((r) => r.id !== tempId));
                 dismiss(loadingId);
                 console.error("Failed to create report:", err);
                 toast("error", err?.message?.slice(0, 120) || "Failed to save report");
                 return null;
             }
         },
-        [program, wallet.publicKey, refreshReports, toast, dismiss]
+        [program, wallet.publicKey, toast, dismiss]
     );
 
     // ---------- Echo (upvote) a report ----------
     const echoReport = useCallback(
         async (reportId: string): Promise<boolean> => {
+            const walletAddr = wallet.publicKey?.toBase58() || "anonymous";
+
+            // --- Duplicate echo prevention ---
+            if (hasEchoed(walletAddr, reportId)) {
+                toast("info", "You have already echoed this report");
+                return false;
+            }
+
+            // --- Optimistic update: immediately increment in UI ---
+            setReports((prev) =>
+                prev.map((r) => {
+                    if (r.id !== reportId) return r;
+                    const newUpvotes = r.upvotes + 1;
+                    return {
+                        ...r,
+                        upvotes: newUpvotes,
+                        isPetition: newUpvotes >= 100 ? true : r.isPetition,
+                    };
+                })
+            );
+
             const loadingId = toast("loading", "Sending echo...");
 
             try {
-                // 1. Get current report
+                // 1. Try to get current report from Supabase
                 const { data: current, error: fetchErr } = await supabase
                     .from("reports")
                     .select("upvotes")
                     .eq("id", reportId)
                     .single();
 
-                if (fetchErr) throw fetchErr;
+                if (fetchErr || !current) {
+                    // Report not in Supabase (likely dummy data) — local-only echo
+                    markEchoed(walletAddr, reportId);
+                    dismiss(loadingId);
+                    toast("success", "Echo registered");
+                    return true;
+                }
 
-                const newUpvotes = (current?.upvotes || 0) + 1;
+                const newUpvotes = (current.upvotes || 0) + 1;
                 const isPetition = newUpvotes >= 100;
 
                 // 2. Update in Supabase
+                const updatePayload: Record<string, any> = { upvotes: newUpvotes };
+                if (isPetition) {
+                    updatePayload.is_petition = true;
+                    updatePayload.status = "petition";
+                }
+
                 const { error: updateErr } = await supabase
                     .from("reports")
-                    .update({
-                        upvotes: newUpvotes,
-                        is_petition: isPetition,
-                        status: isPetition ? "petition" : undefined,
-                    })
+                    .update(updatePayload)
                     .eq("id", reportId);
 
                 if (updateErr) throw updateErr;
 
+                // Mark as echoed in localStorage
+                markEchoed(walletAddr, reportId);
+
                 // 3. Optionally echo on-chain
                 if (program && wallet.publicKey) {
                     try {
-                        const reportPubkey = new PublicKey(reportId);
-                        const [echoPda] = findEchoPda(reportPubkey, wallet.publicKey);
+                        const isValidPubkey = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(reportId);
+                        if (isValidPubkey) {
+                            const reportPubkey = new PublicKey(reportId);
+                            const [echoPda] = findEchoPda(reportPubkey, wallet.publicKey);
 
-                        const txHash = await program.methods
-                            .echoReport()
-                            .accounts({
-                                civicReport: reportPubkey,
-                                echoReceipt: echoPda,
-                                voter: wallet.publicKey,
-                                systemProgram: SystemProgram.programId,
-                            })
-                            .rpc();
+                            const txHash = await program.methods
+                                .echoReport()
+                                .accounts({
+                                    civicReport: reportPubkey,
+                                    echoReceipt: echoPda,
+                                    voter: wallet.publicKey,
+                                    systemProgram: SystemProgram.programId,
+                                })
+                                .rpc();
 
-                        dismiss(loadingId);
-                        toast("success", "Echo submitted on-chain", { txHash });
+                            dismiss(loadingId);
+                            toast("success", "Echo submitted on-chain", { txHash });
+                        } else {
+                            dismiss(loadingId);
+                            toast("success", "Echo registered");
+                        }
                     } catch (chainErr: any) {
                         dismiss(loadingId);
                         if (chainErr?.message?.includes("already in use")) {
@@ -304,16 +450,22 @@ export function useZkWhisper(): UseZkWhisperReturn {
                     toast("success", "Echo registered");
                 }
 
-                await refreshReports();
                 return true;
             } catch (err: any) {
+                // --- Rollback optimistic update on error ---
+                setReports((prev) =>
+                    prev.map((r) => {
+                        if (r.id !== reportId) return r;
+                        return { ...r, upvotes: r.upvotes - 1 };
+                    })
+                );
                 dismiss(loadingId);
                 console.error("Failed to echo report:", err);
                 toast("error", "Echo failed");
                 return false;
             }
         },
-        [program, wallet.publicKey, refreshReports, toast, dismiss]
+        [program, wallet.publicKey, toast, dismiss]
     );
 
     // ---------- Close a report ----------
@@ -371,6 +523,81 @@ export function useZkWhisper(): UseZkWhisperReturn {
         [program, wallet.publicKey, refreshReports, toast, dismiss]
     );
 
+    // ---------- Admin: Settle a report ----------
+    const settleReport = useCallback(
+        async (reportId: string): Promise<boolean> => {
+            const loadingId = toast("loading", "Settling report...");
+            try {
+                const { error } = await supabase
+                    .from("reports")
+                    .update({ status: "settled" })
+                    .eq("id", reportId);
+                if (error) throw error;
+
+                dismiss(loadingId);
+                toast("success", "Report marked as settled");
+                await refreshReports();
+                return true;
+            } catch (err: any) {
+                dismiss(loadingId);
+                console.error("Failed to settle report:", err);
+                toast("error", err?.message?.slice(0, 120) || "Failed to settle report");
+                return false;
+            }
+        },
+        [refreshReports, toast, dismiss]
+    );
+
+    // ---------- Admin: Delete a report ----------
+    const deleteReport = useCallback(
+        async (reportId: string): Promise<boolean> => {
+            const loadingId = toast("loading", "Deleting report...");
+            try {
+                const { error } = await supabase
+                    .from("reports")
+                    .delete()
+                    .eq("id", reportId);
+                if (error) throw error;
+
+                dismiss(loadingId);
+                toast("success", "Report deleted");
+                await refreshReports();
+                return true;
+            } catch (err: any) {
+                dismiss(loadingId);
+                console.error("Failed to delete report:", err);
+                toast("error", err?.message?.slice(0, 120) || "Failed to delete report");
+                return false;
+            }
+        },
+        [refreshReports, toast, dismiss]
+    );
+
+    // ---------- Admin: Update a report ----------
+    const updateReport = useCallback(
+        async (reportId: string, fields: Partial<{ title: string; description: string; category: string; status: string }>): Promise<boolean> => {
+            const loadingId = toast("loading", "Updating report...");
+            try {
+                const { error } = await supabase
+                    .from("reports")
+                    .update(fields)
+                    .eq("id", reportId);
+                if (error) throw error;
+
+                dismiss(loadingId);
+                toast("success", "Report updated");
+                await refreshReports();
+                return true;
+            } catch (err: any) {
+                dismiss(loadingId);
+                console.error("Failed to update report:", err);
+                toast("error", err?.message?.slice(0, 120) || "Failed to update report");
+                return false;
+            }
+        },
+        [refreshReports, toast, dismiss]
+    );
+
     return {
         reports,
         isOnChain,
@@ -378,6 +605,9 @@ export function useZkWhisper(): UseZkWhisperReturn {
         createReport,
         echoReport,
         closeReport,
+        settleReport,
+        deleteReport,
+        updateReport,
         refreshReports,
     };
 }

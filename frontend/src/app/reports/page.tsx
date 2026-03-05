@@ -2,12 +2,11 @@
 
 import React, { useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import NavSearch from "@/components/NavSearch";
 import { useZkWhisper } from "@/hooks/useZkWhisper";
 import type { ReportCategory } from "@/lib/types";
 import { CATEGORY_META } from "@/lib/types";
 import Link from "next/link";
+import Navbar from "@/components/Navbar";
 
 /* ─── Categories ─── */
 const CATEGORIES: { key: ReportCategory | "all"; label: string; dot: string }[] = [
@@ -20,6 +19,10 @@ const CATEGORIES: { key: ReportCategory | "all"; label: string; dot: string }[] 
 ];
 
 type TimeFilter = "24h" | "7d" | "30d" | "all";
+type SortBy = "echoes" | "newest" | "oldest";
+type StatusFilter = "all" | "active" | "petition" | "settled";
+
+const ITEMS_PER_PAGE = 12;
 
 function timeAgo(ts: number): string {
     const diff = Date.now() - ts;
@@ -33,21 +36,29 @@ function timeAgo(ts: number): string {
 export default function ReportsPage() {
     const [activeCategory, setActiveCategory] = useState<ReportCategory | "all">("all");
     const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
+    const [sortBy, setSortBy] = useState<SortBy>("echoes");
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
     const [searchQuery, setSearchQuery] = useState("");
+    const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
     const { reports } = useZkWhisper();
 
-    const sortedReports = useMemo(
-        () => [...reports].sort((a, b) => b.upvotes - a.upvotes),
-        [reports]
-    );
-
     const filteredReports = useMemo(() => {
-        let list = sortedReports;
+        let list = [...reports];
+        // Category
         if (activeCategory !== "all") list = list.filter((r) => r.category === activeCategory);
+        // Status
+        if (statusFilter !== "all") {
+            list = list.filter((r) => {
+                if (statusFilter === "petition") return r.isPetition;
+                return r.status === statusFilter;
+            });
+        }
+        // Time
         if (timeFilter !== "all") {
             const ms = timeFilter === "24h" ? 864e5 : timeFilter === "7d" ? 6048e5 : 2592e6;
             list = list.filter((r) => Date.now() - r.createdAt <= ms);
         }
+        // Search
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase();
             list = list.filter(
@@ -57,8 +68,15 @@ export default function ReportsPage() {
                     r.category.toLowerCase().includes(q)
             );
         }
+        // Sort
+        if (sortBy === "echoes") list.sort((a, b) => b.upvotes - a.upvotes);
+        else if (sortBy === "newest") list.sort((a, b) => b.createdAt - a.createdAt);
+        else list.sort((a, b) => a.createdAt - b.createdAt);
         return list;
-    }, [sortedReports, activeCategory, timeFilter, searchQuery]);
+    }, [reports, activeCategory, statusFilter, timeFilter, searchQuery, sortBy]);
+
+    const visibleReports = filteredReports.slice(0, visibleCount);
+    const hasMore = visibleCount < filteredReports.length;
 
     const pill = (active: boolean): React.CSSProperties => ({
         display: "inline-flex",
@@ -79,80 +97,7 @@ export default function ReportsPage() {
 
     return (
         <div style={{ background: "var(--bg-primary)", minHeight: "100vh" }}>
-            {/* Navbar */}
-            <nav
-                style={{
-                    position: "sticky",
-                    top: 0,
-                    zIndex: 100,
-                    backdropFilter: "blur(24px) saturate(1.2)",
-                    WebkitBackdropFilter: "blur(24px) saturate(1.2)",
-                    background: "rgba(7,7,13,0.78)",
-                    borderBottom: "1px solid var(--line)",
-                }}
-            >
-                <div
-                    style={{
-                        maxWidth: 1200,
-                        margin: "0 auto",
-                        padding: "0 20px",
-                        height: 60,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                    }}
-                >
-                    <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-                        <img src="/logo.png" alt="Civic Echo" style={{ width: 32, height: 32, borderRadius: 8 }} />
-                        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)" }}>Civic Echo</span>
-                    </Link>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 2 }} className="hidden md:flex">
-                        {[
-                            { href: "/map", label: "Map" },
-                            { href: "/reports", label: "Reports" },
-                            { href: "/create", label: "+ Create" },
-                            { href: "/leaderboard", label: "Leaderboard" },
-                            { href: "/dashboard", label: "Dashboard" },
-                        ].map((link) => (
-                            <Link
-                                key={link.href}
-                                href={link.href}
-                                style={{
-                                    padding: "8px 14px",
-                                    fontSize: 13,
-                                    fontWeight: link.href === "/reports" ? 600 : 400,
-                                    color: link.href === "/reports" ? "var(--accent)" : "var(--text-2)",
-                                    textDecoration: "none",
-                                    borderRadius: 8,
-                                    transition: "color 0.15s",
-                                }}
-                            >
-                                {link.label}
-                            </Link>
-                        ))}
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <Link
-                            href="/map"
-                            style={{
-                                padding: "8px 20px",
-                                fontSize: 13,
-                                fontWeight: 600,
-                                color: "#07070d",
-                                background: "var(--accent)",
-                                borderRadius: 10,
-                                textDecoration: "none",
-                            }}
-                        >
-                            Open Map →
-                        </Link>
-                        <NavSearch />
-                        <WalletMultiButton />
-                    </div>
-                </div>
-            </nav>
+            <Navbar />
 
             {/* Header */}
             <div
@@ -217,50 +162,67 @@ export default function ReportsPage() {
                 </div>
             </section>
 
-            {/* Filters + Search */}
-            <div
-                style={{
-                    maxWidth: 1200,
-                    margin: "0 auto",
-                    padding: "20px 20px 0",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: 12,
-                }}
-            >
-                <input
-                    type="text"
-                    placeholder="Search reports..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{
-                        padding: "10px 18px",
-                        borderRadius: 10,
-                        border: "1px solid var(--line)",
-                        background: "var(--bg-secondary)",
-                        color: "var(--text-1)",
-                        fontSize: 13,
-                        width: 280,
-                        outline: "none",
-                    }}
-                />
+            {/* Status filter tabs */}
+            <div style={{ maxWidth: 1200, margin: "0 auto", padding: "16px 20px 0", display: "flex", gap: 4, borderBottom: "1px solid var(--line)" }}>
+                {(["all", "active", "petition", "settled"] as StatusFilter[]).map((s) => (
+                    <button
+                        key={s}
+                        onClick={() => { setStatusFilter(s); setVisibleCount(ITEMS_PER_PAGE); }}
+                        style={{
+                            padding: "10px 18px", fontSize: 13, fontWeight: statusFilter === s ? 600 : 400,
+                            color: statusFilter === s ? "var(--accent)" : "var(--text-3)",
+                            background: "transparent", border: "none", cursor: "pointer",
+                            borderBottom: statusFilter === s ? "2px solid var(--accent)" : "2px solid transparent",
+                            transition: "all 0.15s", textTransform: "capitalize",
+                        }}
+                    >
+                        {s === "all" ? "All" : s}
+                    </button>
+                ))}
+            </div>
+
+            {/* Filters + Search + Sort */}
+            <div style={{
+                maxWidth: 1200, margin: "0 auto", padding: "16px 20px 0",
+                display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12,
+            }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <input
+                        type="text"
+                        placeholder="Search reports..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        style={{
+                            padding: "10px 18px", borderRadius: 10,
+                            border: "1px solid var(--line)", background: "var(--bg-secondary)",
+                            color: "var(--text-1)", fontSize: 13, width: 260, outline: "none",
+                        }}
+                    />
+                    <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as SortBy)}
+                        style={{
+                            padding: "10px 14px", borderRadius: 10,
+                            border: "1px solid var(--line)", background: "var(--bg-secondary)",
+                            color: "var(--text-1)", fontSize: 13, outline: "none", cursor: "pointer",
+                        }}
+                    >
+                        <option value="echoes">Most Echoes</option>
+                        <option value="newest">Newest First</option>
+                        <option value="oldest">Oldest First</option>
+                    </select>
+                </div>
                 <div style={{ display: "flex", gap: 6 }}>
                     {(["24h", "7d", "30d", "all"] as TimeFilter[]).map((t) => (
                         <button
                             key={t}
                             onClick={() => setTimeFilter(t)}
                             style={{
-                                padding: "7px 14px",
-                                borderRadius: 8,
-                                fontSize: 12,
+                                padding: "7px 14px", borderRadius: 8, fontSize: 12,
                                 fontWeight: timeFilter === t ? 600 : 400,
                                 background: timeFilter === t ? "var(--accent)" : "transparent",
                                 color: timeFilter === t ? "#07070d" : "var(--text-3)",
-                                border: "none",
-                                cursor: "pointer",
-                                transition: "all 0.15s",
+                                border: "none", cursor: "pointer", transition: "all 0.15s",
                             }}
                         >
                             {t === "all" ? "All time" : t}
@@ -280,7 +242,7 @@ export default function ReportsPage() {
                     gap: 18,
                 }}
             >
-                {filteredReports.map((r, i) => (
+                {visibleReports.map((r, i) => (
                     <motion.div
                         key={r.id}
                         initial={{ opacity: 0, y: 20 }}
@@ -411,6 +373,23 @@ export default function ReportsPage() {
                         <p style={{ fontSize: 13, color: "var(--text-3)", marginTop: 4 }}>
                             Try adjusting your filters or search query
                         </p>
+                    </div>
+                )}
+
+                {hasMore && (
+                    <div style={{ gridColumn: "1 / -1", textAlign: "center", paddingTop: 12 }}>
+                        <button
+                            onClick={() => setVisibleCount((c) => c + ITEMS_PER_PAGE)}
+                            style={{
+                                padding: "12px 36px", borderRadius: 10, fontSize: 14, fontWeight: 600,
+                                background: "rgba(255,255,255,0.04)", border: "1px solid var(--line)",
+                                color: "var(--text-1)", cursor: "pointer", transition: "all 0.15s",
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+                        >
+                            Load More ({filteredReports.length - visibleCount} remaining)
+                        </button>
                     </div>
                 )}
             </div>

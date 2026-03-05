@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion, useMotionValueEvent, useScroll } from "framer-motion";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useZkWhisper } from "@/hooks/useZkWhisper";
-import NavSearch from "@/components/NavSearch";
 import { CATEGORY_META } from "@/lib/types";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import Navbar from "@/components/Navbar";
 
 const GlobeView = dynamic(() => import("@/components/GlobeView"), { ssr: false });
 
@@ -49,102 +48,8 @@ export default function Home() {
 
 
 
-
       {/* ═══ Floating navbar ═══ */}
-      <nav
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 100,
-          backdropFilter: "blur(16px) saturate(1.2)",
-          WebkitBackdropFilter: "blur(16px) saturate(1.2)",
-          background: "rgba(8,8,18,0.6)",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 1400,
-            margin: "0 auto",
-            padding: "0 24px",
-            height: 56,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-            <img src="/logo.png" alt="Civic Echo" style={{ width: 32, height: 32, borderRadius: 8 }} />
-            <span style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
-              Civic Echo
-            </span>
-          </Link>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }} className="hidden md:flex">
-            {[
-              { href: "/map", label: "Map" },
-              { href: "/reports", label: "Reports" },
-              { href: "/create", label: "+ Create", accent: true },
-              { href: "/leaderboard", label: "Leaderboard" },
-              { href: "/dashboard", label: "Dashboard" },
-            ].map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                style={{
-                  padding: (link as any).accent ? "6px 16px" : "8px 16px",
-                  fontSize: 13,
-                  fontWeight: (link as any).accent ? 700 : 500,
-                  color: (link as any).accent ? "#07070d" : "rgba(255,255,255,0.6)",
-                  background: (link as any).accent ? "var(--accent)" : "transparent",
-                  textDecoration: "none",
-                  borderRadius: (link as any).accent ? 20 : 8,
-                  transition: "all 0.2s",
-                  boxShadow: (link as any).accent ? "0 2px 12px var(--accent-glow)" : "none",
-                }}
-                onMouseEnter={(e) => {
-                  if (!(link as any).accent) {
-                    e.currentTarget.style.color = "#fff";
-                    e.currentTarget.style.background = "rgba(255,255,255,0.06)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!(link as any).accent) {
-                    e.currentTarget.style.color = "rgba(255,255,255,0.6)";
-                    e.currentTarget.style.background = "transparent";
-                  }
-                }}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <NavSearch />
-
-            <Link
-              href="/map"
-              style={{
-                padding: "8px 20px",
-                fontSize: 13,
-                fontWeight: 600,
-                color: "#07070d",
-                background: "var(--accent)",
-                borderRadius: 10,
-                textDecoration: "none",
-                boxShadow: "0 2px 12px rgba(0,232,123,0.2)",
-                transition: "all 0.2s",
-              }}
-            >
-              Open Map →
-            </Link>
-            <WalletMultiButton />
-          </div>
-        </div>
-      </nav>
+      <Navbar position="fixed" />
 
       {/* ═══ Hero overlay — fades out on scroll ═══ */}
       <motion.div
@@ -383,51 +288,67 @@ export default function Home() {
         </motion.div>
       </motion.div>
 
-      {/* ═══ Bottom CTA (appears after fully zoomed) ═══ */}
-      <motion.div
-        style={{
-          position: "fixed",
-          bottom: 40,
-          left: 0,
-          right: 0,
-          zIndex: 20,
-          display: "flex",
-          justifyContent: "center",
-          pointerEvents: zoomedIn ? "auto" : "none",
-        }}
-        animate={{ opacity: zoomedIn ? 1 : 0, y: zoomedIn ? 0 : 20 }}
-        transition={{ duration: 0.5 }}
-      >
-        <Link
-          href="/map"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "14px 32px",
-            borderRadius: 14,
-            fontSize: 14,
-            fontWeight: 600,
-            background: "rgba(0,232,123,0.15)",
-            border: "1px solid rgba(0,232,123,0.3)",
-            color: "#00e87b",
-            textDecoration: "none",
-            backdropFilter: "blur(16px)",
-            boxShadow: "0 4px 30px rgba(0,232,123,0.15)",
-            transition: "all 0.3s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#00e87b";
-            e.currentTarget.style.color = "#07070d";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "rgba(0,232,123,0.15)";
-            e.currentTarget.style.color = "#00e87b";
-          }}
-        >
-          🗺️ Enter Full Map Experience →
-        </Link>
-      </motion.div>
+      {/* ═══ Bottom CTA — appears after scroll, grows as you scroll ═══ */}
+      {(() => {
+        // Button appears at 20% scroll, fully grown at 100%
+        const btnProgress = Math.max(0, (scrollProgress - 0.2) / 0.8);
+        const btnOpacity = Math.min(1, btnProgress * 2); // Fades in quickly
+        const btnScale = 0.7 + btnProgress * 0.5; // 0.7 → 1.2
+        const btnPadV = 12 + btnProgress * 12; // 12px → 24px
+        const btnPadH = 24 + btnProgress * 28; // 24px → 52px
+        const btnFontSize = 13 + btnProgress * 7; // 13px → 20px
+        const btnRadius = 12 + btnProgress * 8; // 12 → 20
+        const btnGlow = btnProgress * 0.4; // glow intensity
+        const btnVisible = scrollProgress > 0.15;
+
+        return (
+          <motion.div
+            style={{
+              position: "fixed",
+              bottom: 40,
+              left: 0,
+              right: 0,
+              zIndex: 20,
+              display: "flex",
+              justifyContent: "center",
+              pointerEvents: btnVisible ? "auto" : "none",
+            }}
+            animate={{ opacity: btnVisible ? btnOpacity : 0, y: btnVisible ? 0 : 30 }}
+            transition={{ duration: 0.4 }}
+          >
+            <Link
+              href="/map"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10 + btnProgress * 4,
+                padding: `${btnPadV}px ${btnPadH}px`,
+                borderRadius: btnRadius,
+                fontSize: btnFontSize,
+                fontWeight: 600,
+                background: `rgba(0,232,123,${0.1 + btnProgress * 0.1})`,
+                border: `1px solid rgba(0,232,123,${0.2 + btnProgress * 0.3})`,
+                color: "#00e87b",
+                textDecoration: "none",
+                backdropFilter: "blur(16px)",
+                boxShadow: `0 4px ${16 + btnProgress * 24}px rgba(0,232,123,${btnGlow})`,
+                transition: "background 0.3s, color 0.3s",
+                transform: `scale(${btnScale})`,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#00e87b";
+                e.currentTarget.style.color = "#07070d";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = `rgba(0,232,123,${0.1 + btnProgress * 0.1})`;
+                e.currentTarget.style.color = "#00e87b";
+              }}
+            >
+              🗺️ Enter Full Map Experience →
+            </Link>
+          </motion.div>
+        );
+      })()}
 
       {/* ═══ Network status badge (bottom-left) ═══ */}
       <motion.div

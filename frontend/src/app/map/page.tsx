@@ -19,6 +19,8 @@ export default function MapPage() {
     const { toast } = useToast();
     const [selectedReport, setSelectedReport] = useState<CivicReport | null>(null);
     const [newReportCoords, setNewReportCoords] = useState<{ lat: number; lng: number } | null>(null);
+    const [showHint, setShowHint] = useState(true);
+    const [guideOpen, setGuideOpen] = useState(true);
 
     const {
         reports,
@@ -91,7 +93,7 @@ export default function MapPage() {
     );
 
     return (
-        <main className="map-page relative w-screen overflow-hidden">
+        <main className={`map-page relative w-screen overflow-hidden ${connected ? "map-cursor-crosshair" : ""}`}>
             <MapView
                 reports={reports}
                 onMapClick={handleMapClick}
@@ -155,25 +157,157 @@ export default function MapPage() {
                 </div>
             </motion.header>
 
-            {/* Bottom hint */}
+            {/* ── How to Report Panel (top-left, below header) ── */}
             <motion.div
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.5 }}
-                className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full text-xs font-medium"
-                style={{
-                    background: "rgba(10,10,15,0.85)",
-                    color: "var(--text-2)",
-                    border: "1px solid var(--line)",
-                    backdropFilter: "blur(8px)",
-                }}
+                initial={{ x: -100, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ delay: 0.4, type: "spring", damping: 22 }}
+                className="absolute top-16 left-4 z-20 how-to-report"
             >
-                {connected
-                    ? isOnChain
-                        ? "Click anywhere on the map to submit a report on-chain 📍"
-                        : "Click anywhere on the map to drop a report 📍"
-                    : "Connect your wallet to submit reports • Hover markers to preview 📍"}
+                <div
+                    className="htr-header"
+                    onClick={() => setGuideOpen((prev) => !prev)}
+                >
+                    <span className="htr-title">
+                        📋 How to Report
+                    </span>
+                    <button className={`htr-toggle ${guideOpen ? "expanded" : ""}`}>
+                        ▼
+                    </button>
+                </div>
+                {guideOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="htr-body"
+                    >
+                        <div className="htr-step">
+                            <span className={`htr-step-number ${connected ? "done" : ""}`}>
+                                {connected ? "✓" : "1"}
+                            </span>
+                            <span className="htr-step-text">
+                                <strong>Connect wallet</strong><br />
+                                {connected
+                                    ? "✅ Wallet connected"
+                                    : "🔗 Click the green button above"}
+                            </span>
+                        </div>
+                        <div className="htr-step">
+                            <span className="htr-step-number">2</span>
+                            <span className="htr-step-text">
+                                <strong>Click on the map</strong><br />
+                                Tap any spot to place a report pin 📍
+                            </span>
+                        </div>
+                        <div className="htr-step">
+                            <span className="htr-step-number">3</span>
+                            <span className="htr-step-text">
+                                <strong>Fill in details</strong><br />
+                                Add title, category, description & photo
+                            </span>
+                        </div>
+                        <div className="htr-step">
+                            <span className="htr-step-number">4</span>
+                            <span className="htr-step-text">
+                                <strong>Submit your report</strong><br />
+                                Your report appears as a dot on the map
+                            </span>
+                        </div>
+                    </motion.div>
+                )}
             </motion.div>
+
+            {/* ── Map Legend (bottom-left) ── */}
+            <motion.div
+                initial={{ y: 40, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                className="absolute bottom-6 left-4 z-20 map-legend"
+            >
+                <div className="legend-title">
+                    <span>🗺️</span> Map Legend
+                </div>
+                <div className="legend-item">
+                    <span className="legend-dot" style={{ background: "#ff3b5c" }} />
+                    <span className="legend-label">New report (1 echo)</span>
+                </div>
+                <div className="legend-item">
+                    <span className="legend-dot" style={{ background: "#f97316" }} />
+                    <span className="legend-label">3+ echoes</span>
+                </div>
+                <div className="legend-item">
+                    <span className="legend-dot" style={{ background: "#eab308" }} />
+                    <span className="legend-label">5+ echoes</span>
+                </div>
+                <div className="legend-item">
+                    <span className="legend-dot" style={{ background: "#22c55e" }} />
+                    <span className="legend-label">10+ echoes (petition)</span>
+                </div>
+                <div className="legend-item">
+                    <span className="legend-dot" style={{ background: "#3b82f6" }} />
+                    <span className="legend-label">Settled</span>
+                </div>
+                <div className="legend-note">
+                    Dot size grows with echo count
+                </div>
+            </motion.div>
+
+            {/* ── Prominent Hint Bar (bottom center) ── */}
+            {showHint && (
+                <motion.div
+                    initial={{ y: 30, opacity: 0, scale: 0.95 }}
+                    animate={{ y: 0, opacity: 1, scale: 1 }}
+                    exit={{ y: 20, opacity: 0 }}
+                    transition={{ delay: 0.3, type: "spring", damping: 18 }}
+                    className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 map-hint-bar"
+                >
+                    <div className="hint-icon">👆</div>
+                    <div>
+                        <div className="hint-text">
+                            {connected
+                                ? isOnChain
+                                    ? "Click anywhere on the map to submit a report on-chain 📍"
+                                    : "Click anywhere on the map to drop a report 📍"
+                                : "Connect your wallet to start reporting"}
+                        </div>
+                        <div className="hint-subtext">
+                            {connected
+                                ? "Hover on dots to preview existing reports"
+                                : "Your reports are anonymous & stored on Solana"}
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => setShowHint(false)}
+                        style={{
+                            background: "none",
+                            border: "none",
+                            color: "var(--text-3)",
+                            cursor: "pointer",
+                            fontSize: 18,
+                            padding: 4,
+                            lineHeight: 1,
+                        }}
+                        title="Dismiss"
+                    >
+                        ✕
+                    </button>
+                </motion.div>
+            )}
+
+            {/* ── Help Button (re-show hint) ── */}
+            {!showHint && (
+                <motion.button
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", damping: 15 }}
+                    onClick={() => setShowHint(true)}
+                    className="absolute bottom-6 right-4 z-20 map-help-btn"
+                    title="Show reporting guide"
+                >
+                    ?
+                </motion.button>
+            )}
 
             {loading && (
                 <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full text-xs font-mono"

@@ -8,7 +8,7 @@ export type ReportCategory =
     | "scam"
     | "other";
 
-export type ReportStatus = "active" | "petition" | "resolved" | "closed";
+export type ReportStatus = "active" | "petition" | "resolved" | "closed" | "settled";
 
 export interface CivicReport {
     id: string;

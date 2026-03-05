@@ -5,11 +5,10 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import NavSearch from "@/components/NavSearch";
 import { useZkWhisper } from "@/hooks/useZkWhisper";
 import { useToast } from "@/components/ToastProvider";
 import type { ReportCategory } from "@/lib/types";
+import Navbar from "@/components/Navbar";
 
 /* ─── Categories ─── */
 const CATEGORIES: { key: ReportCategory; label: string; emoji: string; color: string; subs: string }[] = [
@@ -55,21 +54,38 @@ export default function CreateReportPage() {
 
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
-    const [category, setCategory] = useState<ReportCategory | "">("");
+    const [category, setCategory] = useState<ReportCategory | "">("")
     const [district, setDistrict] = useState("");
     const [wardNumber, setWardNumber] = useState(1);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [dragging, setDragging] = useState(false);
 
-    const handleImageChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    /* Completeness score */
+    const completeness = [title.trim(), description.trim(), category, district].filter(Boolean).length;
+    const completenessPercent = Math.round((completeness / 4) * 100);
+
+    const processFile = useCallback((file: File) => {
+        if (!file.type.startsWith("image/")) return;
+        if (file.size > 5 * 1024 * 1024) { toast("error", "Image must be under 5MB"); return; }
         setImageFile(file);
         const reader = new FileReader();
         reader.onload = () => setImagePreview(reader.result as string);
         reader.readAsDataURL(file);
-    }, []);
+    }, [toast]);
+
+    const handleImageChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) processFile(file);
+    }, [processFile]);
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setDragging(false);
+        const file = e.dataTransfer.files[0];
+        if (file) processFile(file);
+    }, [processFile]);
 
     const handleSubmit = useCallback(async () => {
         if (!title.trim()) { toast("error", "Please enter a title"); return; }
@@ -126,56 +142,7 @@ export default function CreateReportPage() {
 
     return (
         <div style={{ background: "var(--bg-primary)", minHeight: "100vh" }}>
-            {/* ─── Navbar ─── */}
-            <nav
-                style={{
-                    position: "sticky", top: 0, zIndex: 100,
-                    backdropFilter: "blur(24px) saturate(1.2)",
-                    WebkitBackdropFilter: "blur(24px) saturate(1.2)",
-                    background: "rgba(7,7,13,0.78)",
-                    borderBottom: "1px solid var(--line)",
-                }}
-            >
-                <div style={{
-                    maxWidth: 1200, margin: "0 auto", padding: "0 20px",
-                    height: 60, display: "flex", alignItems: "center", justifyContent: "space-between",
-                }}>
-                    <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-                        <img src="/logo.png" alt="Civic Echo" style={{ width: 32, height: 32, borderRadius: 8 }} />
-                        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)" }}>Civic Echo</span>
-                    </Link>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                        {[
-                            { href: "/map", label: "Map" },
-                            { href: "/reports", label: "Reports" },
-                            { href: "/create", label: "+ Create", active: true },
-                            { href: "/leaderboard", label: "Leaderboard" },
-                            { href: "/dashboard", label: "Dashboard" },
-                        ].map((l) => (
-                            <Link
-                                key={l.label}
-                                href={l.href}
-                                style={{
-                                    fontSize: 13,
-                                    fontWeight: l.active ? 700 : 500,
-                                    color: l.active ? "#07070d" : "var(--text-2)",
-                                    background: l.active ? "var(--accent)" : "transparent",
-                                    textDecoration: "none",
-                                    padding: l.active ? "6px 16px" : "6px 14px",
-                                    borderRadius: l.active ? 20 : 8,
-                                    boxShadow: l.active ? "0 2px 12px var(--accent-glow)" : "none",
-                                }}
-                            >{l.label}</Link>
-                        ))}
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <NavSearch />
-                        <WalletMultiButton />
-                    </div>
-                </div>
-            </nav>
+            <Navbar />
 
             {/* ─── Main Content ─── */}
             <div style={{ maxWidth: 640, margin: "0 auto", padding: "48px 20px 80px" }}>
@@ -206,7 +173,12 @@ export default function CreateReportPage() {
                 >
                     {/* Title */}
                     <div>
-                        <label style={labelStyle}>Title</label>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                            <label style={labelStyle}>Title</label>
+                            <span style={{ fontSize: 11, color: title.length > 70 ? "var(--danger)" : "var(--text-3)" }}>
+                                {title.length}/80
+                            </span>
+                        </div>
                         <input
                             type="text"
                             placeholder="Brief title of the issue..."
@@ -219,11 +191,16 @@ export default function CreateReportPage() {
 
                     {/* Description */}
                     <div>
-                        <label style={labelStyle}>Description</label>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                            <label style={labelStyle}>Description</label>
+                            <span style={{ fontSize: 11, color: description.length > 450 ? "var(--danger)" : "var(--text-3)" }}>
+                                {description.length}/500
+                            </span>
+                        </div>
                         <textarea
                             placeholder="Describe the issue in detail — what, where, when..."
                             value={description}
-                            onChange={(e) => setDescription(e.target.value)}
+                            onChange={(e) => setDescription(e.target.value.slice(0, 500))}
                             rows={4}
                             style={{ ...inputStyle, resize: "vertical", minHeight: 100 }}
                         />
@@ -319,13 +296,16 @@ export default function CreateReportPage() {
                             <button
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}
+                                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                                onDragLeave={() => setDragging(false)}
+                                onDrop={handleDrop}
                                 style={{
                                     width: "100%",
                                     padding: "32px 20px",
                                     borderRadius: 10,
-                                    border: "2px dashed var(--line)",
-                                    background: "transparent",
-                                    color: "var(--text-3)",
+                                    border: dragging ? "2px dashed var(--accent)" : "2px dashed var(--line)",
+                                    background: dragging ? "var(--accent-dim)" : "transparent",
+                                    color: dragging ? "var(--accent)" : "var(--text-3)",
                                     cursor: "pointer",
                                     fontSize: 14,
                                     transition: "all 0.2s",
@@ -336,7 +316,7 @@ export default function CreateReportPage() {
                                 }}
                             >
                                 <span style={{ fontSize: 28 }}>📷</span>
-                                Click to upload an image
+                                Click or drag & drop an image
                                 <span style={{ fontSize: 11, color: "var(--text-3)" }}>JPG, PNG, WebP up to 5MB</span>
                             </button>
                         ) : (
@@ -369,6 +349,28 @@ export default function CreateReportPage() {
                                 </button>
                             </div>
                         )}
+                    </div>
+
+                    {/* Completeness indicator */}
+                    <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                            <span style={{ fontSize: 12, color: "var(--text-3)" }}>Form completeness</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: completenessPercent === 100 ? "var(--accent)" : "var(--text-2)" }}>
+                                {completenessPercent}%
+                            </span>
+                        </div>
+                        <div style={{ height: 6, borderRadius: 999, background: "var(--bg-secondary)", overflow: "hidden" }}>
+                            <motion.div
+                                animate={{ width: `${completenessPercent}%` }}
+                                transition={{ duration: 0.3 }}
+                                style={{
+                                    height: "100%", borderRadius: 999,
+                                    background: completenessPercent === 100
+                                        ? "var(--accent)"
+                                        : "linear-gradient(90deg, var(--danger), var(--purple))",
+                                }}
+                            />
+                        </div>
                     </div>
 
                     {/* On-chain indicator */}
@@ -424,6 +426,48 @@ export default function CreateReportPage() {
                         )}
                     </button>
                 </motion.div>
+
+                {/* ─── Live Preview ─── */}
+                {(title || description || category) && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        style={{
+                            background: "var(--bg-card)",
+                            border: "1px solid var(--line)",
+                            borderRadius: 14,
+                            padding: 24,
+                            marginTop: 24,
+                        }}
+                    >
+                        <h3 style={{ fontSize: 13, fontWeight: 600, color: "var(--text-3)", marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                            Preview
+                        </h3>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                            {category && (
+                                <span style={{
+                                    fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999,
+                                    background: `${CATEGORIES.find((c) => c.key === category)?.color || "#666"}20`,
+                                    color: CATEGORIES.find((c) => c.key === category)?.color || "#666",
+                                }}>
+                                    {CATEGORIES.find((c) => c.key === category)?.emoji} {CATEGORIES.find((c) => c.key === category)?.label}
+                                </span>
+                            )}
+                            {district && (
+                                <span style={{ fontSize: 11, color: "var(--text-3)" }}>📍 {district}, Ward {wardNumber}</span>
+                            )}
+                        </div>
+                        <h2 style={{ fontSize: 18, fontWeight: 700, color: title ? "var(--text-1)" : "var(--text-3)", marginBottom: 8 }}>
+                            {title || "Report title will appear here..."}
+                        </h2>
+                        <p style={{ fontSize: 13, color: description ? "var(--text-2)" : "var(--text-3)", lineHeight: 1.6 }}>
+                            {description || "Description will appear here..."}
+                        </p>
+                        {imagePreview && (
+                            <img src={imagePreview} alt="Preview" style={{ width: "100%", maxHeight: 150, objectFit: "cover", borderRadius: 8, marginTop: 12 }} />
+                        )}
+                    </motion.div>
+                )}
             </div>
         </div>
     );

@@ -77,6 +77,26 @@ function timeAgo(ts: number): string {
     return `${Math.floor(hrs / 24)}d ago`;
 }
 
+/**
+ * Get dynamic marker style based on echo count and status.
+ */
+function getMarkerStyle(report: CivicReport): { size: number; color: string; animation: string } {
+    // Settled reports always show blue, regardless of echo count
+    if (report.status === "settled") {
+        return { size: 24, color: "#3b82f6", animation: "pulse-blue 2s ease-in-out infinite" };
+    }
+    if (report.upvotes >= 10) {
+        return { size: 36, color: "#22c55e", animation: "pulse-green 1.5s ease-in-out infinite" };
+    }
+    if (report.upvotes >= 5) {
+        return { size: 28, color: "#eab308", animation: "pulse-yellow 2s ease-in-out infinite" };
+    }
+    if (report.upvotes >= 3) {
+        return { size: 22, color: "#f97316", animation: "pulse-orange 2s ease-in-out infinite" };
+    }
+    return { size: 16, color: "#ff3b5c", animation: "pulse-red 2s ease-in-out infinite" };
+}
+
 export default function MapView({ reports, onMapClick, onMarkerClick }: MapViewProps) {
     const mapRef = useRef<MapRef>(null);
     const [mapStyle, setMapStyle] = useState(DARK_STYLE);
@@ -231,6 +251,7 @@ export default function MapView({ reports, onMapClick, onMarkerClick }: MapViewP
 
             {reports.map((report) => {
                 const meta = CATEGORY_META[report.category] ?? CATEGORY_META.other;
+                const marker = getMarkerStyle(report);
                 return (
                     <Marker
                         key={report.id}
@@ -246,22 +267,21 @@ export default function MapView({ reports, onMapClick, onMarkerClick }: MapViewP
                             onMouseEnter={() => setHoveredReport(report)}
                             onMouseLeave={() => setHoveredReport(null)}
                             style={{
-                                width: 28,
-                                height: 28,
+                                width: marker.size,
+                                height: marker.size,
                                 borderRadius: "50%",
-                                background: report.isPetition
-                                    ? "radial-gradient(circle, var(--accent) 0%, rgba(0,232,123,0.3) 100%)"
-                                    : `radial-gradient(circle, ${meta.color} 0%, ${meta.color}44 100%)`,
-                                border: `2px solid ${report.isPetition ? "var(--accent)" : meta.color}`,
-                                boxShadow: `0 0 12px ${report.isPetition ? "var(--accent-glow)" : meta.color + "55"}`,
+                                background: `radial-gradient(circle, ${marker.color} 0%, ${marker.color}44 100%)`,
+                                border: `2px solid ${marker.color}`,
+                                boxShadow: `0 0 ${marker.size * 0.5}px ${marker.color}55`,
                                 cursor: "pointer",
                                 display: "grid",
                                 placeItems: "center",
-                                fontSize: 13,
+                                fontSize: Math.max(10, marker.size * 0.4),
+                                animation: marker.animation,
                                 transition: "transform 0.15s",
                             }}
                         >
-                            {meta.emoji}
+                            {marker.size >= 20 ? meta.emoji : ""}
                         </div>
                     </Marker>
                 );
