@@ -50,7 +50,7 @@ export default function AdminPage() {
     const isAdmin = wallet.publicKey?.toBase58() === ADMIN_WALLET;
 
     /* ─── Unauthorized gate ─── */
-    if (!wallet.publicKey || !isAdmin) {
+    if (!mounted || !wallet.publicKey || !isAdmin) {
         return (
             <div style={{ background: "var(--bg-primary)", minHeight: "100vh" }}>
                 <Navbar />
