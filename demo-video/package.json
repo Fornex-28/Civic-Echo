@@ -1,0 +1,20 @@
+{
+    "name": "civic-echo-demo",
+    "version": "1.0.0",
+    "description": "Civic Echo hackathon demo video built with Remotion",
+    "scripts": {
+        "start": "remotion studio",
+        "build": "remotion render CivicEchoDemo out/demo.mp4",
+        "upgrade": "remotion upgrade"
+    },
+    "dependencies": {
+        "@remotion/cli": "4.0.433",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "remotion": "4.0.433"
+    },
+    "devDependencies": {
+        "@types/react": "^18.3.1",
+        "typescript": "^5.0.0"
+    }
+}

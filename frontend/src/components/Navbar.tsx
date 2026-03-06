@@ -35,7 +35,7 @@ export default function Navbar({ position = "sticky", style }: NavbarProps) {
 
     const links = [
         ...NAV_LINKS,
-        ...(isAdmin ? [{ href: "/admin", label: "Admin" }] : []),
+        ...(mounted && isAdmin ? [{ href: "/admin", label: "Admin" }] : []),
     ];
 
     const isActive = (href: string) => pathname === href;

@@ -49,32 +49,6 @@ export default function AdminPage() {
 
     const isAdmin = wallet.publicKey?.toBase58() === ADMIN_WALLET;
 
-    /* ─── Unauthorized gate ─── */
-    if (!mounted || !wallet.publicKey || !isAdmin) {
-        return (
-            <div style={{ background: "var(--bg-primary)", minHeight: "100vh" }}>
-                <Navbar />
-                <div style={{ textAlign: "center", padding: "120px 20px" }}>
-                    <div style={{ fontSize: 56, marginBottom: 20 }}>🔒</div>
-                    <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-1)", marginBottom: 10 }}>
-                        Admin Access Required
-                    </h1>
-                    <p style={{ fontSize: 14, color: "var(--text-3)", marginBottom: 28, maxWidth: 400, margin: "0 auto 28px" }}>
-                        {!wallet.publicKey
-                            ? "Connect your admin wallet to access the dashboard."
-                            : "This wallet is not authorized to access the admin panel."}
-                    </p>
-                    {mounted && !wallet.publicKey && <WalletMultiButton />}
-                    <div style={{ marginTop: 24 }}>
-                        <Link href="/" style={{ fontSize: 14, fontWeight: 600, color: "var(--accent)", textDecoration: "none" }}>
-                            ← Back to Home
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
     const filteredReports = useMemo(() => {
         if (!searchQuery.trim()) return reports;
         const q = searchQuery.toLowerCase();
@@ -86,6 +60,13 @@ export default function AdminPage() {
                 r.status.toLowerCase().includes(q)
         );
     }, [reports, searchQuery]);
+
+    const stats = useMemo(() => ({
+        total: reports.length,
+        active: reports.filter((r) => r.status === "active").length,
+        settled: reports.filter((r) => r.status === "settled").length,
+        petitions: reports.filter((r) => r.isPetition).length,
+    }), [reports]);
 
     const handleSettle = async (id: string) => {
         await settleReport(id);
@@ -112,12 +93,31 @@ export default function AdminPage() {
         setEditingReport(null);
     };
 
-    const stats = useMemo(() => ({
-        total: reports.length,
-        active: reports.filter((r) => r.status === "active").length,
-        settled: reports.filter((r) => r.status === "settled").length,
-        petitions: reports.filter((r) => r.isPetition).length,
-    }), [reports]);
+    /* ─── Unauthorized gate ─── */
+    if (!mounted || !wallet.publicKey || !isAdmin) {
+        return (
+            <div style={{ background: "var(--bg-primary)", minHeight: "100vh" }}>
+                <Navbar />
+                <div style={{ textAlign: "center", padding: "120px 20px" }}>
+                    <div style={{ fontSize: 56, marginBottom: 20 }}>🔒</div>
+                    <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-1)", marginBottom: 10 }}>
+                        Admin Access Required
+                    </h1>
+                    <p style={{ fontSize: 14, color: "var(--text-3)", marginBottom: 28, maxWidth: 400, margin: "0 auto 28px" }}>
+                        {!mounted || !wallet.publicKey
+                            ? "Connect your admin wallet to access the dashboard."
+                            : "This wallet is not authorized to access the admin panel."}
+                    </p>
+                    {mounted && !wallet.publicKey && <WalletMultiButton />}
+                    <div style={{ marginTop: 24 }}>
+                        <Link href="/" style={{ fontSize: 14, fontWeight: 600, color: "var(--accent)", textDecoration: "none" }}>
+                            ← Back to Home
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     const btnBase: React.CSSProperties = {
         padding: "6px 14px",
